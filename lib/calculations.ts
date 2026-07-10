@@ -313,9 +313,10 @@ export function calculateEstimate(inputs: CalculationInputs, pricing: Pricing): 
     // real Roofr reports. Replaces the inaccurate generic sq×multiplier formula.
     //
     // Validated accuracy vs. Roofr (same address):
-    //   complex_hip  (N≥13, 4 quadrants) → <1% error   (Alder Grove, 18 segs)
-    //   moderate_hip (N≥7  or 3 quadrants) → <2% error  (Emerson, 9 segs)
-    //   simple       (N≤6, ≤2 quadrants) → <1% error    (Memorial, 4 segs)
+    //   complex_hip      (N≥13, 4 quadrants) → <1% error  (Alder Grove, 18 segs)
+    //   cross_gable_hip  (N 7-12, 4 quadrants) → <1% error (9908 S3150W, 12 segs)
+    //   moderate_hip     (Q=3 or N≥7, non-4-quad) → <2% error (Emerson, 9 segs)
+    //   simple           (N≤6, ≤2 quadrants) → <1% error (Memorial, 4 segs)
     // ─────────────────────────────────────────────────────────────────────────
 
     /** Ratios: feet per Solar API segment, calibrated from Roofr reports. */
@@ -324,6 +325,12 @@ export function calculateEstimate(inputs: CalculationInputs, pricing: Pricing): 
             // Calibrated from: 10237 Alder Grove Way (18 segs, 4 quadrants)
             ridges: 7.9, hips: 7.1, valleys: 8.8,
             eaves: 15.7, rakes: 7.3, wallFlashing: 2.2, stepFlashing: 1.7,
+        },
+        cross_gable_hip: {
+            // Calibrated from: 9908 S 3150 W (12 segs, 4 quadrants)
+            // Cross-gable + hip mix: eaves ≈ rakes (balanced), moderate hips & valleys
+            ridges: 6.85, hips: 5.29, valleys: 5.13,
+            eaves: 15.19, rakes: 15.15, wallFlashing: 2.23, stepFlashing: 8.63,
         },
         moderate_hip: {
             // Calibrated from: Emerson address (9 segs, 3 quadrants)
@@ -350,6 +357,7 @@ export function calculateEstimate(inputs: CalculationInputs, pricing: Pricing): 
         const quadrants = [hasN, hasE, hasS, hasW].filter(Boolean).length;
 
         if (quadrants >= 4 && N >= 13) return 'complex_hip';
+        if (quadrants >= 4 && N >= 7)  return 'cross_gable_hip'; // all 4 dirs, medium segment count
         if (quadrants >= 3 || N >= 7)  return 'moderate_hip';
         return 'simple';
     }
