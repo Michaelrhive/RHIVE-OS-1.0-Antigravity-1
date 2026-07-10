@@ -903,9 +903,9 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
 
                         {/* List of buildings */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                             {buildingData?.buildings.map((building, idx) => {
+                            {buildingData?.buildings.map((building, idx) => {
                                 const isIncluded = surveyState.includedBuildingIds.includes(building.id);
-                                const sqValue = (building.totalAreaMeters * 10.7639).toFixed(0);
+                                const sqValue = (building.totalAreaMeters * 10.7639 / 100).toFixed(2);
                                 const isCustom = building.id.startsWith('BLD_') && building.id !== 'BLD_1';
                                 const isFocused = building.id === focusedBuildingId;
                                 
@@ -929,7 +929,7 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
                                                 <div className="flex items-center gap-1.5 mt-1.5" onClick={e => e.stopPropagation()}>
                                                     <input
                                                         type="text"
-                                                        value={overrideInputs[building.id] !== undefined ? overrideInputs[building.id] : (building.isOverridden ? (building.overrideSq ? Math.round(building.overrideSq * 100).toString() : '') : sqValue)}
+                                                        value={overrideInputs[building.id] !== undefined ? overrideInputs[building.id] : (building.isOverridden ? building.overrideSq?.toString() || '' : sqValue)}
                                                         onChange={(e) => {
                                                             const val = e.target.value;
                                                             setOverrideInputs(prev => ({ ...prev, [building.id]: val }));
@@ -941,9 +941,9 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
                                                                     buildings: prev.buildings.map(b => {
                                                                         if (b.id === building.id) {
                                                                             const isOverridden = val.trim() !== "";
-                                                                            const overrideSq = isOverridden ? (isNaN(numVal) ? 0 : numVal / 100) : undefined;
+                                                                            const overrideSq = isOverridden ? (isNaN(numVal) ? 0 : numVal) : undefined;
                                                                             
-                                                                            const newTotalAreaMeters = isOverridden ? (numVal / 10.7639) : b.totalAreaMeters;
+                                                                            const newTotalAreaMeters = isOverridden ? (overrideSq * 100 / 10.7639) : b.totalAreaMeters;
                                                                             const numFacets = b.facets.length || 1;
                                                                             const newFacets = b.facets.map(f => {
                                                                                 let newFacetArea = f.areaMeters;
@@ -977,7 +977,7 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
                                                         placeholder="--"
                                                         className="w-16 h-7 text-xs bg-black/60 border border-gray-800 text-pink-400 font-semibold font-mono rounded text-center px-1 focus:outline-none focus:border-pink-500 focus:shadow-[0_0_8px_rgba(236,2,139,0.35)] focus:ring-0 transition-all duration-200"
                                                     />
-                                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">SQFT</span>
+                                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">SQ</span>
                                                 </div>
                                             </div>
                                             <div className="flex items-center space-x-2" onClick={e => e.stopPropagation()}>
@@ -995,7 +995,7 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
                                                     isFocused || building.isOverridden ? "text-pink-400" : "text-gray-500"
                                                 )}>
                                                     {building.isOverridden 
-                                                        ? "Manual SQFT Override" 
+                                                        ? "Manual SQ Override" 
                                                         : (isFocused ? (isDrawingOutline ? "Drawing Mode" : "Editing Outline") : "Click to Edit Outline")}
                                                 </span>
                                                 {(isFocused || building.isOverridden) && (
