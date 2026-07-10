@@ -92,6 +92,22 @@ export function calculateEstimate(inputs: CalculationInputs, pricing: Pricing): 
             }
         });
 
+        // Apply manual building override if present
+        if (building.isOverridden && building.overrideSq !== undefined) {
+            const rawSum = bldgAsphaltSq + bldgFlatSq;
+            if (rawSum > 0) {
+                const ratio = building.overrideSq / rawSum;
+                bldgAsphaltSq *= ratio;
+                bldgFlatSq *= ratio;
+                bldgAsphaltMaterialCost *= ratio;
+                bldgAsphaltLaborCost *= ratio;
+                bldgAsphaltOverheadCost *= ratio;
+            } else {
+                bldgAsphaltSq = building.overrideSq;
+                bldgFlatSq = 0;
+            }
+        }
+
         // Apply special override to primary buildings only (non-custom buildings)
         const isCustomBuilding = building.id.startsWith('BLD');
         if (!isCustomBuilding && !building.isOverridden) {
