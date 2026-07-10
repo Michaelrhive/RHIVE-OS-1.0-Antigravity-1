@@ -56,6 +56,7 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
   const [overrideInputs, setOverrideInputs] = useState<Record<string, string>>({});
   const hasAnimatedRef = useRef<boolean>(false);
   const isAnimatingRef = useRef<boolean>(false);
+  const drawingPolylineRef = useRef<any>(null);
 
   // Centroid calculator helper
   const getPolygonCenter = (vertices: { lat: number; lng: number }[], fallbackLat: number, fallbackLng: number) => {
@@ -301,7 +302,38 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
     };
   }, [map, isAddingPin, setBuildingData, onSurveyChange]);
 
-  // drawing mode map click listener
+  // Manage drawing polyline lifecycle
+  useEffect(() => {
+    if (!map) return;
+
+    if (isDrawingOutline) {
+      if (!drawingPolylineRef.current) {
+        const currentBuilding = buildingData?.buildings.find(b => b.id === focusedBuildingId);
+        const initialPath = (currentBuilding?.polygonVertices || []).map(v => new window.google.maps.LatLng(v.lat, v.lng));
+        const polyline = new window.google.maps.Polyline({
+          strokeColor: '#ec028b',
+          strokeOpacity: 0.9,
+          strokeWeight: 3.5,
+          map: map,
+          path: initialPath
+        });
+        drawingPolylineRef.current = polyline;
+      }
+    } else {
+      if (drawingPolylineRef.current) {
+        drawingPolylineRef.current.setMap(null);
+        drawingPolylineRef.current = null;
+      }
+    }
+
+    return () => {
+      if (drawingPolylineRef.current) {
+        drawingPolylineRef.current.setMap(null);
+        drawingPolylineRef.current = null;
+      }
+    };
+  }, [map, isDrawingOutline, focusedBuildingId, buildingData]);
+
   useEffect(() => {
     if (!map || !focusedBuildingId || !isDrawingOutline) return;
 
@@ -329,34 +361,28 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
             if (b.id === focusedBuildingId) {
               const newVertices = [...(b.polygonVertices || []), { lat, lng }];
               
-              const poly = gPolygonsMapRef.current.get(b.id);
-              if (poly) {
-                const path = poly.getPath();
-                path.push(e.latLng);
-                
-                let newAreaMeters = 0;
-                if (newVertices.length >= 3) {
-                  newAreaMeters = window.google.maps.geometry.spherical.computeArea(path);
-                }
-                
-                const avgPitchDeg = b.facets.reduce((sum, f) => sum + f.pitchDegrees, 0) / b.facets.length || 22.6;
-                const newFacets = b.facets.map(f => ({
-                  ...f,
-                  areaMeters: newAreaMeters / b.facets.length,
-                  pitchDegrees: avgPitchDeg
-                }));
-                
-                return {
-                  ...b,
-                  totalAreaMeters: newAreaMeters,
-                  polygonVertices: newVertices,
-                  facets: newFacets
-                };
+              if (drawingPolylineRef.current) {
+                drawingPolylineRef.current.getPath().push(e.latLng);
               }
+              
+              let newAreaMeters = 0;
+              if (newVertices.length >= 3) {
+                const tempPathCoords = newVertices.map(v => new window.google.maps.LatLng(v.lat, v.lng));
+                newAreaMeters = window.google.maps.geometry.spherical.computeArea(tempPathCoords);
+              }
+              
+              const avgPitchDeg = b.facets.reduce((sum, f) => sum + f.pitchDegrees, 0) / b.facets.length || 22.6;
+              const newFacets = b.facets.map(f => ({
+                ...f,
+                areaMeters: newAreaMeters / b.facets.length,
+                pitchDegrees: avgPitchDeg
+              }));
               
               return {
                 ...b,
-                polygonVertices: newVertices
+                totalAreaMeters: newAreaMeters,
+                polygonVertices: newVertices,
+                facets: newFacets
               };
             }
             return b;
@@ -376,8 +402,51 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
       }
     });
 
+    const drawDblClickListener = window.google.maps.event.addListener(map, 'dblclick', (e: any) => {
+      e.stop(); // Prevent zoom
+      
+      setBuildingData(prev => {
+        if (!prev) return prev;
+        
+        const currentBuilding = prev.buildings.find(b => b.id === focusedBuildingId);
+        if (currentBuilding && currentBuilding.polygonVertices && currentBuilding.polygonVertices.length >= 3) {
+          // Remove consecutive duplicates added by the double click
+          const vertices = currentBuilding.polygonVertices;
+          const cleanVertices = vertices.filter((v, idx) => {
+              if (idx === 0) return true;
+              const prevV = vertices[idx - 1];
+              return Math.abs(v.lat - prevV.lat) > 0.00001 || Math.abs(v.lng - prevV.lng) > 0.00001;
+          });
+          
+          setIsDrawingOutline(false);
+          const poly = gPolygonsMapRef.current.get(focusedBuildingId);
+          if (poly) {
+            poly.setOptions({
+              editable: true,
+              draggable: true
+            });
+          }
+          
+          return {
+            ...prev,
+            buildings: prev.buildings.map(b => {
+              if (b.id === focusedBuildingId) {
+                return {
+                  ...b,
+                  polygonVertices: cleanVertices
+                };
+              }
+              return b;
+            })
+          };
+        }
+        return prev;
+      });
+    });
+
     return () => {
       window.google.maps.event.removeListener(drawClickListener);
+      window.google.maps.event.removeListener(drawDblClickListener);
     };
   }, [map, isDrawingOutline, focusedBuildingId, setBuildingData]);
 
@@ -451,9 +520,17 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
       }
 
       const isFocused = building.id === focusedBuildingId;
-      
       let poly = gPolygonsMapRef.current.get(building.id);
+      
+      if (isFocused && isDrawingOutline) {
+        if (poly) {
+          poly.setMap(null);
+        }
+        return;
+      }
+      
       const vertices = building.polygonVertices || [];
+
       const pathCoords = vertices.map(v => new window.google.maps.LatLng(v.lat, v.lng));
 
       // Skip updating if this building is currently animating
@@ -593,7 +670,9 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
         }
       } else {
         // Update styling, editable, and draggable state
+        poly.setMap(map);
         poly.setOptions({
+
           strokeOpacity: isFocused ? 0.9 : 0.5,
           strokeWeight: isFocused ? 3.5 : 2,
           fillOpacity: isFocused ? 0.25 : 0.08,
