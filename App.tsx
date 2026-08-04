@@ -37,6 +37,7 @@ const AppContentAuthenticated: React.FC = () => {
     const { theme } = useTheme();
     const isDark = theme === 'dark';
     const mainRef = React.useRef<HTMLElement>(null);
+    const hasRedirectedRef = React.useRef(false);
 
     // Refresh the 24-hour session window on any user activity
     useEffect(() => {
@@ -110,7 +111,8 @@ const AppContentAuthenticated: React.FC = () => {
 
     useEffect(() => {
         // Redirect to role dashboard after login from ANY public page (P-xx) or no page
-        if (currentUser && (!activePageId || activePageId.startsWith('P-'))) {
+        if (!hasRedirectedRef.current && currentUser && (!activePageId || activePageId.startsWith('P-'))) {
+            hasRedirectedRef.current = true;
             switch (currentUser.role) {
                 case 'Super Admin': setActivePageId('SA-01'); break;
                 case 'Admin': setActivePageId('E-01'); break;

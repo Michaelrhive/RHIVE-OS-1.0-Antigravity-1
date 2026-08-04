@@ -17,8 +17,8 @@ backlog:
   - "[N3] REPO_AUDIT: Compare old/current RHIVE OS branches. QA_EXIT:0."
   - "[N2] TEAM_SYNC: Transcribe recorded Same Page Meetings. QA_EXIT:0."
   - "[N9] CALENDAR_OPT: Restructure calendars for Martell color-blocks. QA_EXIT:0."
-review:
 done:
+  - "[N1] ESTIMATE_REDIRECT_HOTFIX: Fixed PasswordResetPage syntax, App.tsx redirect loop. QA_EXIT:0."
   - "[N1] INTAKE_PORTAL_UPGRADES_AND_SETTINGS_LIMIT: Moved inline notes to footer editor modal, enriched collapsed summaries, implemented state boundary blocks with bypass, added settings boundary input, and validated builds. QA_EXIT:0."
   - "[N1] BRANCH_CHERRYPICK: Created michael-branch-1.0, cherry-picked 17 UI commits from Michael-Branch. QA_EXIT:0."
   - "[N1] INTAKE_LOOKUP_TAB_AND_SPACING: Prevented lookup modal popup on intake page, implemented tab-to-autofill queries, adjusted homepage lane spacing by 5pt, and captured full walkthrough screenshots. QA_EXIT:0."
