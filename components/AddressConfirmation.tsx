@@ -1093,7 +1093,10 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                             {buildingData?.buildings.map((building, idx) => {
                                 const isIncluded = surveyState.includedBuildingIds.includes(building.id);
-                                const sqValue = (building.totalAreaMeters * 10.7639 / 100).toFixed(2);
+                                const hasValue = building.isOverridden || (building.polygonVertices && building.polygonVertices.length > 0);
+                                const sqValue = hasValue 
+                                    ? (building.totalAreaMeters * 10.7639 / 100).toFixed(2)
+                                    : "";
                                 const isCustom = building.id.startsWith('BLD_') && building.id !== 'BLD_1';
                                 const isFocused = building.id === focusedBuildingId;
                                 
@@ -1172,6 +1175,7 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
                                                 <Switch 
                                                     checked={isIncluded} 
                                                     onCheckedChange={() => handleBuildingToggle(building.id)} 
+                                                    aria-label={`Toggle inclusion of building ${idx + 1}`}
                                                 />
                                             </div>
                                         </div>
@@ -1184,7 +1188,13 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
                                                 )}>
                                                     {building.isOverridden 
                                                         ? "Manual SQ Override" 
-                                                        : (isFocused ? (isDrawingOutline ? "Drawing Mode" : "Editing Outline") : "Click to Edit Outline")}
+                                                        : (isFocused 
+                                                            ? (isDrawingOutline 
+                                                                ? "Drawing Mode" 
+                                                                : ((building.polygonVertices && building.polygonVertices.length > 0) 
+                                                                    ? "Editing Outline" 
+                                                                    : "No Outline Drawn")) 
+                                                            : "Click to Edit Outline")}
                                                 </span>
                                                 {(isFocused || building.isOverridden) && (
                                                     <button
@@ -1194,7 +1204,11 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
                                                     >
                                                         {building.isOverridden
                                                             ? "Clear Override & Redraw"
-                                                            : (isDrawingOutline ? "Cancel Drawing" : "Clear & Redraw Outline")}
+                                                            : (isDrawingOutline 
+                                                                ? "Cancel Drawing" 
+                                                                : ((building.polygonVertices && building.polygonVertices.length > 0) 
+                                                                    ? "Clear & Redraw Outline" 
+                                                                    : "Draw Outline"))}
                                                     </button>
                                                 )}
                                             </div>
