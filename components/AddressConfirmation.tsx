@@ -194,24 +194,16 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
   useEffect(() => {
     if (!isApiReady || !mapRef.current || map) return;
 
-    const initialMapType = hasAnimatedRef.current ? 'satellite' : 'roadmap';
     const mapInstance = new window.google.maps.Map(mapRef.current, {
       center: { lat: place.latitude, lng: place.longitude },
       zoom: 20,
-      mapTypeId: initialMapType,
+      mapTypeId: 'satellite',
       disableDefaultUI: true,
       zoomControl: true,
       tilt: 0,
     });
 
     setMap(mapInstance);
-
-    if (!hasAnimatedRef.current) {
-      const timer = setTimeout(() => {
-        mapInstance.setMapTypeId('satellite');
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
   }, [isApiReady, place.latitude, place.longitude, map]);
 
   // 2. Set Map Cursor Style in Pin Dropping and Polygon Drawing Modes

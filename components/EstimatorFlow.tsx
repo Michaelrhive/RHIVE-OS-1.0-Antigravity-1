@@ -210,13 +210,33 @@ export const EstimatorFlow: React.FC<EstimatorFlowProps> = ({ onClose, initialPl
   }, []);
 
   React.useEffect(() => {
+    const handleReset = () => {
+      if (appState === 'landing') {
+        onClose();
+      } else {
+        setAppState('landing');
+        setSelectedPlace(null);
+        setBuildingData(null);
+        setSurveyState(INITIAL_SURVEY_STATE);
+      }
+    };
+    window.addEventListener('rhive-reset-estimator', handleReset);
+    return () => {
+      window.removeEventListener('rhive-reset-estimator', handleReset);
+    };
+  }, [appState, onClose]);
+
+  React.useEffect(() => {
     if (initialPlace) {
       handlePlaceSelected(initialPlace);
     }
   }, [initialPlace, handlePlaceSelected]);
 
   const handleStartNew = () => {
-    onClose();
+    setAppState('landing');
+    setSelectedPlace(null);
+    setBuildingData(null);
+    setSurveyState(INITIAL_SURVEY_STATE);
   };
 
   const handleConfirmAddress = () => {
