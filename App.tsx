@@ -31,13 +31,21 @@ const isPasswordResetFlow = (): boolean => {
            (mode === 'firestoreReset' && !!params.get('token'));
 };
 
+let initialDashboardRedirectDone = (() => {
+    if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const pageCode = params.get('page');
+        return !!pageCode && pageCode !== 'P-06';
+    }
+    return false;
+})();
+
 const AppContentAuthenticated: React.FC = () => {
     const { activePageId, setActivePageId, showEditorMenu } = useNavigation();
     const { currentUser } = useMockDB();
     const { theme } = useTheme();
     const isDark = theme === 'dark';
     const mainRef = React.useRef<HTMLElement>(null);
-    const hasRedirectedRef = React.useRef(false);
 
     // Refresh the 24-hour session window on any user activity
     useEffect(() => {
@@ -111,8 +119,8 @@ const AppContentAuthenticated: React.FC = () => {
 
     useEffect(() => {
         // Redirect to role dashboard after login from ANY public page (P-xx) or no page
-        if (!hasRedirectedRef.current && currentUser && (!activePageId || activePageId.startsWith('P-'))) {
-            hasRedirectedRef.current = true;
+        if (!initialDashboardRedirectDone && currentUser && (!activePageId || activePageId.startsWith('P-'))) {
+            initialDashboardRedirectDone = true;
             switch (currentUser.role) {
                 case 'Super Admin': setActivePageId('SA-01'); break;
                 case 'Admin': setActivePageId('E-01'); break;

@@ -439,8 +439,9 @@ export function buildBuildingFromSolarData(solarData: any, clickedLat: number, c
   const dy4 = -heightMeters / 2;
   
   const rotate = (dx: number, dy: number) => {
-    const rx = dx * Math.cos(theta) - dy * Math.sin(theta);
-    const ry = dx * Math.sin(theta) + dy * Math.cos(theta);
+    // Correct clockwise rotation for maps coordinate system (Y is North, X is East)
+    const rx = dx * Math.cos(theta) + dy * Math.sin(theta);
+    const ry = -dx * Math.sin(theta) + dy * Math.cos(theta);
     return {
       lat: centerLat + ry / latConv,
       lng: centerLng + rx / lngConv
