@@ -18,6 +18,7 @@ backlog:
   - "[N2] TEAM_SYNC: Transcribe recorded Same Page Meetings. QA_EXIT:0."
   - "[N9] CALENDAR_OPT: Restructure calendars for Martell color-blocks. QA_EXIT:0."
 done:
+  - "[N1] BLANK_MAP_TRANSITION_FIX: Fixed TypeError when building.polygonVertices is empty. QA_EXIT:0."
   - "[N1] REMOVE_INITIAL_POLYGON: Removed auto-drawn polygon to allow manual entry/drawing. QA_EXIT:0."
   - "[N1] POLYGON_SNAP_ROTATION_FIX: Fixed coordinate math clockwise rotation in mockData.ts. QA_EXIT:0."
   - "[N1] ESTIMATE_REDIRECT_HOTFIX: Fixed PasswordResetPage syntax, App.tsx redirect loop. QA_EXIT:0."

@@ -716,8 +716,14 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
         }
         return;
       }
-      
       const vertices = building.polygonVertices || [];
+      if (vertices.length === 0) {
+        if (poly) {
+          poly.setMap(null);
+          gPolygonsMapRef.current.delete(building.id);
+        }
+        return;
+      }
 
       const pathCoords = vertices.map(v => new window.google.maps.LatLng(v.lat, v.lng));
 
