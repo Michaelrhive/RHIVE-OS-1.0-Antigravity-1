@@ -127,6 +127,7 @@ export const MapMeasurementTool: React.FC<MapMeasurementToolProps> = ({ center, 
       zoomControl: true,
       tilt: 0,
       disableDoubleClickZoom: true, // Prevent zoom on double-click
+      clickableIcons: false, // Prevent POIs from intercepting clicks
     });
     setMap(mapInstance);
 
@@ -134,6 +135,7 @@ export const MapMeasurementTool: React.FC<MapMeasurementToolProps> = ({ center, 
       strokeColor: '#ec028b',
       strokeWeight: 4,
       map: mapInstance,
+      clickable: false, // Prevent active line from intercepting clicks
     });
 
     const finishActiveLineLoc = () => {
@@ -143,6 +145,7 @@ export const MapMeasurementTool: React.FC<MapMeasurementToolProps> = ({ center, 
           strokeWeight: 4,
           map: mapInstance,
           editable: true,
+          clickable: false, // Prevent completed lines from intercepting clicks
           path: activePathRef.current,
         });
 
