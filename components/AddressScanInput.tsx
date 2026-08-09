@@ -66,7 +66,7 @@ export const AddressScanInput = ({
             window.dispatchEvent(new CustomEvent('open-roof-configurator', {
                 detail: {
                     address: currentVal || "525 Aspen Meadow Dr, Logan, UT",
-                    mode: 'estimate'
+                    mode: themeColor === 'gold' ? 'quote' : 'estimate'
                 }
             }));
         }

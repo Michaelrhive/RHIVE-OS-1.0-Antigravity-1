@@ -731,19 +731,22 @@ const PublicHomepage: React.FC = () => {
             sessionStorage.removeItem('intakePurchaseIntent');
             sessionStorage.removeItem('globalSearchQuery');
             
+            let targetPage = 'P-12';
             if (customEvent.detail?.mode) {
                 if (customEvent.detail.mode === 'quote') {
                     sessionStorage.setItem('intakeScopeType', 'Replacement');
                     sessionStorage.setItem('intakePurchaseIntent', 'Ready');
+                    targetPage = 'E-02a';
                 } else {
                     sessionStorage.setItem('intakeScopeType', 'Replacement');
                     sessionStorage.setItem('intakePurchaseIntent', 'Exploring');
+                    targetPage = 'P-12';
                 }
             }
             if (customEvent.detail?.address) {
                 sessionStorage.setItem('globalSearchQuery', customEvent.detail.address);
             }
-            setActivePageId('E-02a');
+            setActivePageId(targetPage);
         };
 
         window.addEventListener('open-emergency-triage', handleEmergencyTriage);

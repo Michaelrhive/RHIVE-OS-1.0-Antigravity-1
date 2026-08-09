@@ -10,6 +10,7 @@ import { RoofOptions } from './RoofOptions';
 import { Gutters } from './Gutters';
 import { HeatTrace } from './HeatTrace';
 import { MeasurementPage } from './MeasurementPage';
+import { useGoogleMapsApi } from '../hooks/useGoogleMapsApi';
 
 type AppState = 'landing' | 'addressConfirmation' | 'roofOptions' | 'gutters' | 'heatTrace' | 'dashboard' | 'gutterMeasurement' | 'heatTraceMeasurement';
 
@@ -231,6 +232,32 @@ export const EstimatorFlow: React.FC<EstimatorFlowProps> = ({ onClose, initialPl
       handlePlaceSelected(initialPlace);
     }
   }, [initialPlace, handlePlaceSelected]);
+
+  const isMapsApiReady = useGoogleMapsApi();
+
+  React.useEffect(() => {
+    if (!isMapsApiReady) return;
+    const query = sessionStorage.getItem('globalSearchQuery');
+    if (query) {
+      sessionStorage.removeItem('globalSearchQuery');
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ address: query }, (results: any, status: any) => {
+        if (status === 'OK' && results && results[0]) {
+          const loc = results[0].geometry.location;
+          const place: Place = {
+            address: results[0].formatted_address,
+            latitude: loc.lat(),
+            longitude: loc.lng(),
+            placeId: results[0].place_id
+          };
+          handlePlaceSelected(place);
+        } else {
+          console.warn("Geocoding failed for:", query, status);
+          setError("Failed to locate address: " + query);
+        }
+      });
+    }
+  }, [isMapsApiReady, handlePlaceSelected]);
 
   const handleStartNew = () => {
     setAppState('landing');

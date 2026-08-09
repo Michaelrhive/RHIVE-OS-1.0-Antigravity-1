@@ -18,6 +18,7 @@ backlog:
   - "[N2] TEAM_SYNC: Transcribe recorded Same Page Meetings. QA_EXIT:0."
   - "[N9] CALENDAR_OPT: Restructure calendars for Martell color-blocks. QA_EXIT:0."
 done:
+  - "[N1] HOMEPAGE_INTAKE_ROUTING: Routes homepage address search to P-12. QA_EXIT:0."
   - "[N1] SATELLITE_AND_BACK_BUTTON_RESETS: Default satellite map, back button resets flow. QA_EXIT:0."
   - "[N1] BLANK_MAP_TRANSITION_FIX: Fixed TypeError when building.polygonVertices is empty. QA_EXIT:0."
   - "[N1] REMOVE_INITIAL_POLYGON: Removed auto-drawn polygon to allow manual entry/drawing. QA_EXIT:0."

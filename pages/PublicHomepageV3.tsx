@@ -160,9 +160,38 @@ const PublicHomepageV3: React.FC = () => {
                 setActiveLightbox(e.detail);
             }
         };
+        const handleRoofConfigurator = (e: Event) => {
+            const customEvent = e as CustomEvent;
+            sessionStorage.removeItem('intakeActiveLeak');
+            sessionStorage.removeItem('intakeEmergencyTarp');
+            sessionStorage.removeItem('intakeScopeType');
+            sessionStorage.removeItem('intakePurchaseIntent');
+            sessionStorage.removeItem('globalSearchQuery');
+            
+            let targetPage = 'P-12';
+            if (customEvent.detail?.mode) {
+                if (customEvent.detail.mode === 'quote') {
+                    sessionStorage.setItem('intakeScopeType', 'Replacement');
+                    sessionStorage.setItem('intakePurchaseIntent', 'Ready');
+                    targetPage = 'E-02a';
+                } else {
+                    sessionStorage.setItem('intakeScopeType', 'Replacement');
+                    sessionStorage.setItem('intakePurchaseIntent', 'Exploring');
+                    targetPage = 'P-12';
+                }
+            }
+            if (customEvent.detail?.address) {
+                sessionStorage.setItem('globalSearchQuery', customEvent.detail.address);
+            }
+            setActivePageId(targetPage);
+        };
         window.addEventListener('v3-open-lightbox', handleOpenLightbox);
-        return () => window.removeEventListener('v3-open-lightbox', handleOpenLightbox);
-    }, []);
+        window.addEventListener('open-roof-configurator', handleRoofConfigurator);
+        return () => {
+            window.removeEventListener('v3-open-lightbox', handleOpenLightbox);
+            window.removeEventListener('open-roof-configurator', handleRoofConfigurator);
+        };
+    }, [setActivePageId]);
 
     return (
         <div className="relative w-full min-h-screen font-sans bg-black text-white overflow-x-hidden">
