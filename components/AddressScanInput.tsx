@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Zap } from './icons';
 import { CheckCircle2 } from 'lucide-react';
+import { useGoogleMapsApi } from '../hooks/useGoogleMapsApi';
 
 interface AddressScanInputProps {
     id?: string;
@@ -45,6 +46,62 @@ export const AddressScanInput = ({
             return () => clearTimeout(resetTimeout);
         }
     }, [index]);
+
+    const isApiReady = useGoogleMapsApi();
+    const autocompleteRef = useRef<any>(null);
+
+    useEffect(() => {
+        if (!isApiReady || !inputRef.current || !window.google || !window.google.maps.places) {
+            return;
+        }
+
+        if (autocompleteRef.current) return;
+
+        const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+            types: ['address'],
+            fields: ['formatted_address', 'geometry', 'place_id'],
+            componentRestrictions: { country: 'us' },
+        });
+
+        autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            if (place.geometry && place.geometry.location && place.formatted_address) {
+                const addressStr = place.formatted_address;
+                if (inputRef.current) {
+                    inputRef.current.value = addressStr;
+                }
+                if (!isControlled) {
+                    setLocalVal(addressStr);
+                }
+                if (onChange) {
+                    onChange(addressStr);
+                }
+                
+                // Immediately trigger scan on selection
+                if (onScan) {
+                    onScan(addressStr);
+                } else {
+                    window.dispatchEvent(new CustomEvent('open-roof-configurator', {
+                        detail: {
+                            address: addressStr,
+                            mode: themeColor === 'gold' ? 'quote' : 'estimate'
+                        }
+                    }));
+                }
+            }
+        });
+
+        autocompleteRef.current = autocomplete;
+
+        return () => {
+            if (autocompleteRef.current) {
+                window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
+                autocompleteRef.current = null;
+            }
+            const pacContainers = document.querySelectorAll('.pac-container');
+            pacContainers.forEach((el) => el.remove());
+        };
+    }, [isApiReady, themeColor, isControlled, onChange, onScan]);
 
     const isControlled = value !== undefined;
     const currentVal = isControlled ? value : localVal;
