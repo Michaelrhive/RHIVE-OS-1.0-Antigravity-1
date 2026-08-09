@@ -9,6 +9,8 @@ interface MapMeasurementToolProps {
   center: { lat: number; lng: number };
   onLengthChange: (length: number) => void;
   onClose: () => void;
+  initialPaths?: { lat: number; lng: number }[][];
+  onPathsChange?: (paths: { lat: number; lng: number }[][]) => void;
 }
 
 declare global {
@@ -26,7 +28,7 @@ const ControlButton: React.FC<{ active: boolean; onClick: () => void; children: 
     </button>
 );
 
-export const MapMeasurementTool: React.FC<MapMeasurementToolProps> = ({ center, onLengthChange, onClose }) => {
+export const MapMeasurementTool: React.FC<MapMeasurementToolProps> = ({ center, onLengthChange, onClose, initialPaths, onPathsChange }) => {
   const isApiReady = useGoogleMapsApi();
   const mapRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -57,6 +59,7 @@ export const MapMeasurementTool: React.FC<MapMeasurementToolProps> = ({ center, 
       lengthInMeters += window.google.maps.geometry.spherical.computeLength(polyline.getPath());
     });
     const lengthInFeet = lengthInMeters * METERS_TO_FEET;
+    console.log("recalculateTotalLength. polylines:", polylinesRef.current.length, "calculated length in feet:", lengthInFeet);
     setCompletedLength(lengthInFeet);
   }, []);
 
@@ -68,7 +71,26 @@ export const MapMeasurementTool: React.FC<MapMeasurementToolProps> = ({ center, 
       const lengthInMeters = window.google.maps.geometry.spherical.computeLength(activePath);
       finalCompletedLength += lengthInMeters * METERS_TO_FEET;
     }
-    onLengthChange(Math.round(finalCompletedLength || totalLength));
+    const finalVal = parseFloat((finalCompletedLength || totalLength).toFixed(1));
+    onLengthChange(finalVal);
+
+    console.log("MapMeasurementTool handleDone. polylines:", polylinesRef.current.length, "activePath:", activePath.length);
+    if (onPathsChange && window.google) {
+      const paths = polylinesRef.current.map(p => {
+        const path = p.getPath();
+        const coords: { lat: number; lng: number }[] = [];
+        for (let i = 0; i < path.getLength(); i++) {
+          const xy = path.getAt(i);
+          coords.push({ lat: xy.lat(), lng: xy.lng() });
+        }
+        return coords;
+      });
+      if (activePath.length > 1) {
+        paths.push(activePath);
+      }
+      onPathsChange(paths);
+    }
+
     onClose();
   };
 
@@ -138,6 +160,31 @@ export const MapMeasurementTool: React.FC<MapMeasurementToolProps> = ({ center, 
       clickable: false, // Prevent active line from intercepting clicks
     });
 
+    console.log("MapMeasurementTool mount. initialPaths:", initialPaths);
+    polylinesRef.current.forEach(polyline => polyline.setMap(null));
+    polylinesRef.current = [];
+
+    if (initialPaths && initialPaths.length > 0) {
+      initialPaths.forEach((path, idx) => {
+        console.log(`Render initialPath ${idx}:`, JSON.stringify(path));
+        const completedPolyline = new window.google.maps.Polyline({
+          strokeColor: '#ec028b',
+          strokeWeight: 4,
+          map: mapInstance,
+          editable: true,
+          clickable: false,
+          path: path,
+        });
+
+        completedPolyline.getPath().addListener('set_at', recalculateTotalLength);
+        completedPolyline.getPath().addListener('insert_at', recalculateTotalLength);
+        completedPolyline.getPath().addListener('remove_at', recalculateTotalLength);
+
+        polylinesRef.current.push(completedPolyline);
+      });
+      recalculateTotalLength();
+    }
+
     const finishActiveLineLoc = () => {
       if (activePathRef.current.length > 1) {
         const completedPolyline = new window.google.maps.Polyline({
@@ -185,13 +232,33 @@ export const MapMeasurementTool: React.FC<MapMeasurementToolProps> = ({ center, 
       window.google.maps.event.removeListener(clickListener);
       window.google.maps.event.removeListener(mousemoveListener);
       window.google.maps.event.removeListener(dblclickListener);
-      clearDrawing();
       if (activePolylineRef.current) {
         activePolylineRef.current.setMap(null);
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isApiReady, center]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (drawingModeRef.current !== 'polyline') return;
+      
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        finishActiveLineRef.current();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setActivePath([]);
+        setTempPoint(null);
+        setLiveSegmentLength(0);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const handleContainerMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (drawingMode !== 'polyline') return;

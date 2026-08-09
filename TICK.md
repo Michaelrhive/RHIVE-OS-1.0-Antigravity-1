@@ -18,6 +18,8 @@ backlog:
   - "[N2] TEAM_SYNC: Transcribe recorded Same Page Meetings. QA_EXIT:0."
   - "[N9] CALENDAR_OPT: Restructure calendars for Martell color-blocks. QA_EXIT:0."
 done:
+  - "[N1] PERSIST_GUTTER_DRAWING: Persist custom drawing coordinates and decimal length. QA_EXIT:0."
+  - "[N1] GUTTER_KEY_LISTENERS: Added Enter/Escape hotkeys to finish/cancel drawings. QA_EXIT:0."
   - "[N1] FIX_GUTTER_DRAWING_CLICKS: Fixed polyline vectors intercepting map clicks. QA_EXIT:0."
   - "[N1] GUTTER_DYNAMIC_MEASURE: Dynamic indicator tooltip for gutter drawing. QA_EXIT:0."
   - "[N1] HIDE_TAG_ANOTHER_BUILDING: Hid Tag Another Building button. QA_EXIT:0."

@@ -27,6 +27,8 @@ export const EstimatorFlow: React.FC<EstimatorFlowProps> = ({ onClose, initialPl
   const [streetViewUrl, setStreetViewUrl] = useState<string>('');
   const [satelliteViewUrl, setSatelliteViewUrl] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [gutterPaths, setGutterPaths] = useState<{ lat: number; lng: number }[][]>([]);
+  const [heatTracePaths, setHeatTracePaths] = useState<{ lat: number; lng: number }[][]>([]);
 
   const handlePlaceSelected = useCallback(async (place: Place) => {
     setError(null);
@@ -212,6 +214,7 @@ export const EstimatorFlow: React.FC<EstimatorFlowProps> = ({ onClose, initialPl
 
   React.useEffect(() => {
     const handleReset = () => {
+      // If we are on the landing page, bubble close to parent
       if (appState === 'landing') {
         onClose();
       } else {
@@ -219,6 +222,8 @@ export const EstimatorFlow: React.FC<EstimatorFlowProps> = ({ onClose, initialPl
         setSelectedPlace(null);
         setBuildingData(null);
         setSurveyState(INITIAL_SURVEY_STATE);
+        setGutterPaths([]);
+        setHeatTracePaths([]);
       }
     };
     window.addEventListener('rhive-reset-estimator', handleReset);
@@ -264,6 +269,8 @@ export const EstimatorFlow: React.FC<EstimatorFlowProps> = ({ onClose, initialPl
     setSelectedPlace(null);
     setBuildingData(null);
     setSurveyState(INITIAL_SURVEY_STATE);
+    setGutterPaths([]);
+    setHeatTracePaths([]);
   };
 
   const handleConfirmAddress = () => {
@@ -362,10 +369,12 @@ export const EstimatorFlow: React.FC<EstimatorFlowProps> = ({ onClose, initialPl
                     title="Measure Gutter Length"
                     center={{ lat: selectedPlace.latitude, lng: selectedPlace.longitude }}
                     onLengthChange={(length) => {
-                        setSurveyState(prev => ({...prev, gutters: {...prev.gutters, length: Math.round(length)}}));
+                        setSurveyState(prev => ({...prev, gutters: {...prev.gutters, length: length}}));
                     }}
                     onDone={handleGutterMeasurementDone}
                     onStartOver={handleStartNew}
+                    initialPaths={gutterPaths}
+                    onPathsChange={setGutterPaths}
                 />
             );
         }
@@ -379,10 +388,12 @@ export const EstimatorFlow: React.FC<EstimatorFlowProps> = ({ onClose, initialPl
                     title="Measure Heat Trace Length"
                     center={{ lat: selectedPlace.latitude, lng: selectedPlace.longitude }}
                     onLengthChange={(length) => {
-                        setSurveyState(prev => ({...prev, heatTrace: {...prev.heatTrace, length: Math.round(length)}}));
+                        setSurveyState(prev => ({...prev, heatTrace: {...prev.heatTrace, length: length}}));
                     }}
                     onDone={handleHeatTraceMeasurementDone}
                     onStartOver={handleStartNew}
+                    initialPaths={heatTracePaths}
+                    onPathsChange={setHeatTracePaths}
                 />
             );
         }

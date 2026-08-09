@@ -123,9 +123,10 @@ export const HeatTrace: React.FC<HeatTraceProps> = ({ surveyState, onSurveyChang
                                      <div className="flex items-center space-x-2 mt-2">
                                         <input
                                             type="number"
+                                            step="any"
                                             placeholder="Ex: 85"
                                             value={heatTrace.length || ''}
-                                            onChange={(e) => handleValueChange('length', parseInt(e.target.value, 10) || 0)}
+                                            onChange={(e) => handleValueChange('length', parseFloat(e.target.value) || 0)}
                                             className="w-full bg-gray-800 border border-gray-700 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-pink-500/70 focus:border-transparent transition"
                                         />
                                          <Button variant="ghost" onClick={onStartMeasurement} className="flex-shrink-0 px-3">
