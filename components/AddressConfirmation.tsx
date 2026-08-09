@@ -42,6 +42,9 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
   const streetViewRef = useRef<HTMLDivElement>(null);
   const panoramaRef = useRef<any>(null);
   const [isStreetViewAvailable, setIsStreetViewAvailable] = useState(true);
+  
+  // Feature flag to control "+ Tag Another Building" visibility
+  const SHOW_TAG_ANOTHER_BUILDING_FEATURE = false;
 
   // Interactive Maps and Pin Drop states
   const isApiReady = useGoogleMapsApi();
@@ -1075,16 +1078,18 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
                     <div className="border-t border-gray-800/80 pt-4">
                         <div className="flex items-center justify-between mb-3">
                             <h3 className="text-lg font-medium text-gray-300">Buildings on Property</h3>
-                            <button
-                                onClick={() => {
-                                    setView('satellite');
-                                    setIsAddingPin(true);
-                                }}
-                                className="inline-flex items-center text-sm font-semibold text-pink-400 hover:text-pink-300 transition-colors gap-1 px-3 py-1.5 rounded bg-pink-500/10 border border-pink-500/20 hover:bg-pink-500/20"
-                            >
-                                <PlusIcon className="h-4 w-4" />
-                                <span>Tag Another Building</span>
-                            </button>
+                            {SHOW_TAG_ANOTHER_BUILDING_FEATURE && (
+                                <button
+                                    onClick={() => {
+                                        setView('satellite');
+                                        setIsAddingPin(true);
+                                    }}
+                                    className="inline-flex items-center text-sm font-semibold text-pink-400 hover:text-pink-300 transition-colors gap-1 px-3 py-1.5 rounded bg-pink-500/10 border border-pink-500/20 hover:bg-pink-500/20"
+                                >
+                                    <PlusIcon className="h-4 w-4" />
+                                    <span>Tag Another Building</span>
+                                </button>
+                            )}
                         </div>
 
                         {/* List of buildings */}

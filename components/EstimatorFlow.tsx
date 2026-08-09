@@ -236,7 +236,7 @@ export const EstimatorFlow: React.FC<EstimatorFlowProps> = ({ onClose, initialPl
   const isMapsApiReady = useGoogleMapsApi();
 
   React.useEffect(() => {
-    if (!isMapsApiReady) return;
+    if (!isMapsApiReady || !window.google?.maps?.Geocoder) return;
     const query = sessionStorage.getItem('globalSearchQuery');
     if (query) {
       sessionStorage.removeItem('globalSearchQuery');

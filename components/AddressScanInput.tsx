@@ -47,6 +47,9 @@ export const AddressScanInput = ({
         }
     }, [index]);
 
+    const isControlled = value !== undefined;
+    const currentVal = isControlled ? value : localVal;
+
     const isApiReady = useGoogleMapsApi();
     const autocompleteRef = useRef<any>(null);
 
@@ -102,9 +105,6 @@ export const AddressScanInput = ({
             pacContainers.forEach((el) => el.remove());
         };
     }, [isApiReady, themeColor, isControlled, onChange, onScan]);
-
-    const isControlled = value !== undefined;
-    const currentVal = isControlled ? value : localVal;
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
