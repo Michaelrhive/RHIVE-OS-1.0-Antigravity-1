@@ -125,148 +125,8 @@ export const authService = {
 
 const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
-export const passwordResetService = {
-    /**
-     * Step 1: Request a password reset.
-     * Looks up the user in Firestore, generates a secure token,
-     * stores it in the `passwordResets` collection, then sends the email.
-     * SECURITY: Always returns success to prevent email enumeration.
-     */
-    requestReset: async (email: string): Promise<{ success: boolean; error?: string }> => {
-        try {
-            const normalized = email.toLowerCase().trim();
+// passwordResetService moved below to avoid duplicate declaration and reference order issues
 
-            // Look up user in Firestore
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, where('email', '==', normalized), limit(1));
-            const snapshot = await getDocs(q);
-
-            if (snapshot.empty) {
-                // Don't reveal user doesn't exist — silently succeed
-                console.warn('[passwordResetService] No user found for email (enumeration guard)');
-                return { success: true };
-            }
-
-            const userDoc = snapshot.docs[0];
-            const userId = userDoc.id;
-            const userName = userDoc.data().name || 'RHIVE User';
-
-            // Generate a cryptographically secure token
-            const tokenBytes = new Uint8Array(32);
-            crypto.getRandomValues(tokenBytes);
-            const token = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-
-            // Store the token in Firestore with expiry
-            const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS).toISOString();
-            await setDoc(doc(db, 'passwordResets', token), {
-                userId,
-                email: normalized,
-                expiresAt,
-                used: false,
-                createdAt: new Date().toISOString(),
-            });
-
-            // Build the reset URL
-            const resetUrl = `${window.location.origin}/?mode=firestoreReset&token=${token}`;
-
-            // Send email via EmailJS
-            const emailjsServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
-            const emailjsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
-            const emailjsPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
-
-            if (!emailjsServiceId || !emailjsTemplateId || !emailjsPublicKey) {
-                console.error('[passwordResetService] EmailJS env vars not configured. Reset URL:', resetUrl);
-                // In dev, still return success and log the URL so it can be tested
-                return { success: true };
-            }
-
-            const { default: emailjs } = await import('@emailjs/browser');
-            await emailjs.send(
-                emailjsServiceId,
-                emailjsTemplateId,
-                {
-                    to_email: normalized,
-                    to_name: userName,
-                    reset_url: resetUrl,
-                    expires_in: '1 hour',
-                    app_name: 'RHIVE QOS',
-                },
-                emailjsPublicKey
-            );
-
-            return { success: true };
-        } catch (error: any) {
-            console.error('[passwordResetService.requestReset] Error:', error);
-            return { success: false, error: 'Unable to send reset email. Please try again later.' };
-        }
-    },
-
-    /**
-     * Step 2: Verify a reset token from the URL.
-     * Returns the email address if valid, or an error if expired/used/invalid.
-     */
-    verifyToken: async (token: string): Promise<{ success: boolean; email?: string; userId?: string; error?: string }> => {
-        try {
-            if (!token) return { success: false, error: 'Invalid reset link.' };
-
-            const tokenDocRef = doc(db, 'passwordResets', token);
-            const tokenSnap = await getDoc(tokenDocRef);
-
-            if (!tokenSnap.exists()) {
-                return { success: false, error: 'This reset link is invalid or has already been used.' };
-            }
-
-            const data = tokenSnap.data();
-
-            if (data.used) {
-                return { success: false, error: 'This reset link has already been used. Please request a new one.' };
-            }
-
-            if (new Date() > new Date(data.expiresAt)) {
-                return { success: false, error: 'This reset link has expired. Links are valid for 1 hour.' };
-            }
-
-            return { success: true, email: data.email, userId: data.userId };
-        } catch (error: any) {
-            console.error('[passwordResetService.verifyToken] Error:', error);
-            return { success: false, error: 'Unable to verify reset link. Please try again.' };
-        }
-    },
-
-    /**
-     * Step 3: Apply the new password.
-     * Hashes the new password and updates password_hash in the users collection.
-     * Marks the reset token as used so it cannot be replayed.
-     */
-    applyNewPassword: async (token: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
-        try {
-            // Re-verify token before applying
-            const verification = await passwordResetService.verifyToken(token);
-            if (!verification.success || !verification.userId) {
-                return { success: false, error: verification.error };
-            }
-
-            const { hashPassword } = await import('./utils');
-            const newHash = await hashPassword(newPassword);
-
-            // Update password_hash in the users collection
-            const userRef = doc(db, 'users', verification.userId);
-            await updateDoc(userRef, {
-                password_hash: newHash,
-                updated_at: new Date().toISOString(),
-            });
-
-            // Mark the token as used (single-use enforcement)
-            const tokenRef = doc(db, 'passwordResets', token);
-            await updateDoc(tokenRef, { used: true, usedAt: new Date().toISOString() });
-
-            return { success: true };
-        } catch (error: any) {
-            console.error('[passwordResetService.applyNewPassword] Error:', error);
-            return { success: false, error: 'Failed to update password. Please try again.' };
-        }
-    },
-};
 
 
 export const firestoreService = {
@@ -834,6 +694,146 @@ export const userService = {
 
 
 export const passwordResetService = {
+    /**
+     * Step 1: Request a password reset.
+     * Looks up the user in Firestore, generates a secure token,
+     * stores it in the `passwordResets` collection, then sends the email.
+     * SECURITY: Always returns success to prevent email enumeration.
+     */
+    requestReset: async (email: string): Promise<{ success: boolean; error?: string }> => {
+        try {
+            const normalized = email.toLowerCase().trim();
+
+            // Look up user in Firestore
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where('email', '==', normalized), limit(1));
+            const snapshot = await getDocs(q);
+
+            if (snapshot.empty) {
+                // Don't reveal user doesn't exist — silently succeed
+                console.warn('[passwordResetService] No user found for email (enumeration guard)');
+                return { success: true };
+            }
+
+            const userDoc = snapshot.docs[0];
+            const userId = userDoc.id;
+            const userName = userDoc.data().name || 'RHIVE User';
+
+            // Generate a cryptographically secure token
+            const tokenBytes = new Uint8Array(32);
+            crypto.getRandomValues(tokenBytes);
+            const token = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+            // Store the token in Firestore with expiry
+            const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS).toISOString();
+            await setDoc(doc(db, 'passwordResets', token), {
+                userId,
+                email: normalized,
+                expiresAt,
+                used: false,
+                createdAt: new Date().toISOString(),
+            });
+
+            // Build the reset URL
+            const resetUrl = `${window.location.origin}/?mode=firestoreReset&token=${token}`;
+
+            // Send email via EmailJS
+            const emailjsServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
+            const emailjsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
+            const emailjsPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+
+            if (!emailjsServiceId || !emailjsTemplateId || !emailjsPublicKey) {
+                console.error('[passwordResetService] EmailJS env vars not configured. Reset URL:', resetUrl);
+                // In dev, still return success and log the URL so it can be tested
+                return { success: true };
+            }
+
+            const { default: emailjs } = await import('@emailjs/browser');
+            await emailjs.send(
+                emailjsServiceId,
+                emailjsTemplateId,
+                {
+                    to_email: normalized,
+                    to_name: userName,
+                    reset_url: resetUrl,
+                    expires_in: '1 hour',
+                    app_name: 'RHIVE QOS',
+                },
+                emailjsPublicKey
+            );
+
+            return { success: true };
+        } catch (error: any) {
+            console.error('[passwordResetService.requestReset] Error:', error);
+            return { success: false, error: 'Unable to send reset email. Please try again later.' };
+        }
+    },
+
+    /**
+     * Step 2: Verify a reset token from the URL.
+     * Returns the email address if valid, or an error if expired/used/invalid.
+     */
+    verifyToken: async (token: string): Promise<{ success: boolean; email?: string; userId?: string; error?: string }> => {
+        try {
+            if (!token) return { success: false, error: 'Invalid reset link.' };
+
+            const tokenDocRef = doc(db, 'passwordResets', token);
+            const tokenSnap = await getDoc(tokenDocRef);
+
+            if (!tokenSnap.exists()) {
+                return { success: false, error: 'This reset link is invalid or has already been used.' };
+            }
+
+            const data = tokenSnap.data();
+
+            if (data.used) {
+                return { success: false, error: 'This reset link has already been used. Please request a new one.' };
+            }
+
+            if (new Date() > new Date(data.expiresAt)) {
+                return { success: false, error: 'This reset link has expired. Links are valid for 1 hour.' };
+            }
+
+            return { success: true, email: data.email, userId: data.userId };
+        } catch (error: any) {
+            console.error('[passwordResetService.verifyToken] Error:', error);
+            return { success: false, error: 'Unable to verify reset link. Please try again.' };
+        }
+    },
+
+    /**
+     * Step 3: Apply the new password.
+     * Hashes the new password and updates password_hash in the users collection.
+     * Marks the reset token as used so it cannot be replayed.
+     */
+    applyNewPassword: async (token: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
+        try {
+            // Re-verify token before applying
+            const verification = await passwordResetService.verifyToken(token);
+            if (!verification.success || !verification.userId) {
+                return { success: false, error: verification.error };
+            }
+
+            const { hashPassword } = await import('./utils');
+            const newHash = await hashPassword(newPassword);
+
+            // Update password_hash in the users collection
+            const userRef = doc(db, 'users', verification.userId);
+            await updateDoc(userRef, {
+                password_hash: newHash,
+                updated_at: new Date().toISOString(),
+            });
+
+            // Mark the token as used (single-use enforcement)
+            const tokenRef = doc(db, 'passwordResets', token);
+            await updateDoc(tokenRef, { used: true, usedAt: new Date().toISOString() });
+
+            return { success: true };
+        } catch (error: any) {
+            console.error('[passwordResetService.applyNewPassword] Error:', error);
+            return { success: false, error: 'Failed to update password. Please try again.' };
+        }
+    },
     /**
      * Generates a reset token, stores it on the user document,
      * then queues a password-reset email via the Firestore `mail` collection.

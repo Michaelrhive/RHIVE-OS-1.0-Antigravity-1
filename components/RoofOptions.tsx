@@ -265,7 +265,10 @@ export const RoofOptions: React.FC<RoofOptionsProps> = ({
                             </div>
                         </div>
 
-                        <div className="mt-8 text-center">
+                        <div className="mt-8 flex justify-center items-center space-x-4">
+                            <Button size="lg" variant="secondary" onClick={onBack}>
+                                Back
+                            </Button>
                             <Button size="lg" onClick={onContinue}>
                                 Continue
                             </Button>

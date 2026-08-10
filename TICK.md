@@ -18,6 +18,7 @@ backlog:
   - "[N2] TEAM_SYNC: Transcribe recorded Same Page Meetings. QA_EXIT:0."
   - "[N9] CALENDAR_OPT: Restructure calendars for Martell color-blocks. QA_EXIT:0."
 done:
+  - "[N1] SOFT_BACK_NAVIGATION: Soft back/previous section button added to wizard flow. QA_EXIT:0."
   - "[N1] PERSIST_GUTTER_DRAWING: Persist custom drawing coordinates and decimal length. QA_EXIT:0."
   - "[N1] GUTTER_KEY_LISTENERS: Added Enter/Escape hotkeys to finish/cancel drawings. QA_EXIT:0."
   - "[N1] FIX_GUTTER_DRAWING_CLICKS: Fixed polyline vectors intercepting map clicks. QA_EXIT:0."

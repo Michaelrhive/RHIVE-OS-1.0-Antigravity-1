@@ -341,6 +341,7 @@ export const EstimatorFlow: React.FC<EstimatorFlowProps> = ({ onClose, initialPl
                     onContinue={handleGuttersContinue}
                     onStartOver={handleStartNew}
                     onStartMeasurement={handleStartGutterMeasurement}
+                    onBack={() => setAppState('roofOptions')}
                 />
             )
         }
@@ -356,6 +357,7 @@ export const EstimatorFlow: React.FC<EstimatorFlowProps> = ({ onClose, initialPl
                     onContinue={handleHeatTraceContinue}
                     onStartOver={handleStartNew}
                     onStartMeasurement={handleStartHeatTraceMeasurement}
+                    onBack={() => setAppState('gutters')}
                 />
             )
         }

@@ -12,6 +12,7 @@ interface GuttersProps {
   onContinue: () => void;
   onStartOver: () => void;
   onStartMeasurement: () => void;
+  onBack: () => void;
 }
 
 const ChoiceButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({ active, onClick, children }) => (
@@ -42,7 +43,7 @@ const DownspoutInput: React.FC<{ label: string; value: number; onChange: (val: n
 );
 
 
-export const Gutters: React.FC<GuttersProps> = ({ surveyState, onSurveyChange, onContinue, onStartOver, onStartMeasurement }) => {
+export const Gutters: React.FC<GuttersProps> = ({ surveyState, onSurveyChange, onContinue, onStartOver, onStartMeasurement, onBack }) => {
     const { gutters } = surveyState;
 
     const handleEnabledChange = (enabled: boolean) => {
@@ -82,6 +83,12 @@ export const Gutters: React.FC<GuttersProps> = ({ surveyState, onSurveyChange, o
                                     <ChoiceButton active={false} onClick={onContinue}>
                                         No, I'll consider it later.
                                     </ChoiceButton>
+                                    
+                                    <div className="pt-2">
+                                        <Button variant="ghost" className="text-gray-400" onClick={onBack}>
+                                            Back to previous section
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
                         ) : (
@@ -168,12 +175,15 @@ export const Gutters: React.FC<GuttersProps> = ({ surveyState, onSurveyChange, o
                         )}
                     </div>
                      {gutters.enabled && (
-                        <div className="mt-8 text-center">
-                            <Button size="lg" onClick={onContinue}>
-                                Continue
-                            </Button>
-                        </div>
-                    )}
+                         <div className="mt-8 flex justify-center items-center space-x-4">
+                             <Button size="lg" variant="secondary" onClick={onBack}>
+                                 Back
+                             </Button>
+                             <Button size="lg" onClick={onContinue}>
+                                 Continue
+                             </Button>
+                         </div>
+                     )}
                 </div>
             </main>
         </div>

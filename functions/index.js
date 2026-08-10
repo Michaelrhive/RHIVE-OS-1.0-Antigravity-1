@@ -1288,7 +1288,7 @@ exports.syncJustCallContactsAndHistory = functions.https.onRequest((req, res) =>
     });
 });
 
-
+/**
  * completePasswordReset
  * POST body: { resetToken, newPassword }
  * - Validates the JWT reset token (issued by verifySmsOtp)

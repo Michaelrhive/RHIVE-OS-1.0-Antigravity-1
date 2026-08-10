@@ -641,7 +641,7 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
     markersRef.current.forEach(m => m.setMap(null));
     markersRef.current = [];
 
-    // Redraw markers
+    // Redraw building markers
     buildingData.buildings.forEach((building, idx) => {
       const isIncluded = surveyState.includedBuildingIds.includes(building.id);
       const isFocused = building.id === focusedBuildingId;
@@ -1096,9 +1096,12 @@ export const AddressConfirmation: React.FC<AddressConfirmationProps> = ({
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                             {buildingData?.buildings.map((building, idx) => {
                                 const isIncluded = surveyState.includedBuildingIds.includes(building.id);
-                                const hasValue = building.isOverridden || (building.polygonVertices && building.polygonVertices.length > 0);
+                                const totalArea = (building.facets && building.facets.length > 0)
+                                    ? building.facets.reduce((sum, f) => sum + f.areaMeters, 0)
+                                    : building.totalAreaMeters;
+                                const hasValue = building.isOverridden || totalArea > 0;
                                 const sqValue = hasValue 
-                                    ? (building.totalAreaMeters * 10.7639 / 100).toFixed(2)
+                                    ? (totalArea * 10.7639 / 100).toFixed(2)
                                     : "";
                                 const isCustom = building.id.startsWith('BLD_') && building.id !== 'BLD_1';
                                 const isFocused = building.id === focusedBuildingId;
