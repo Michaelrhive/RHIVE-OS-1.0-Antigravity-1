@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import type { Place, BuildingData, SurveyState } from '../types';
+import { getMapsApiKey } from '../lib/mapsConfig';
 import { LandingPage } from './LandingPage';
 import { Dashboard } from './Dashboard';
 import { generateMockBuildingData } from '../lib/mockData';
@@ -14,18 +15,19 @@ type AppState = 'landing' | 'addressConfirmation' | 'roofOptions' | 'gutters' | 
 
 interface EstimatorFlowProps {
   onClose: () => void;
+  initialPlace?: Place;
 }
 
-export const EstimatorFlow: React.FC<EstimatorFlowProps> = ({ onClose }) => {
-  const [appState, setAppState] = useState<AppState>('landing');
-  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+export const EstimatorFlow: React.FC<EstimatorFlowProps> = ({ onClose, initialPlace }) => {
+  const [appState, setAppState] = useState<AppState>(initialPlace ? 'addressConfirmation' : 'landing');
+  const [selectedPlace, setSelectedPlace] = useState<Place | null>(initialPlace || null);
   const [buildingData, setBuildingData] = useState<BuildingData | null>(null);
   const [surveyState, setSurveyState] = useState<SurveyState>(INITIAL_SURVEY_STATE);
   const [streetViewUrl, setStreetViewUrl] = useState<string>('');
   const [satelliteViewUrl, setSatelliteViewUrl] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
-  const handlePlaceSelected = useCallback((place: Place) => {
+  const handlePlaceSelected = useCallback(async (place: Place) => {
     setError(null);
     try {
       const data = generateMockBuildingData(place);
@@ -68,6 +70,12 @@ export const EstimatorFlow: React.FC<EstimatorFlowProps> = ({ onClose }) => {
       setError(e.message || "An unexpected error occurred.");
     }
   }, []);
+
+  React.useEffect(() => {
+    if (initialPlace) {
+      handlePlaceSelected(initialPlace);
+    }
+  }, [initialPlace, handlePlaceSelected]);
 
   const handleStartNew = () => {
     onClose();

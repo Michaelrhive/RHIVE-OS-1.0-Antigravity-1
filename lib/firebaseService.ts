@@ -4,6 +4,9 @@ import {
     signInWithEmailAndPassword,
     signOut,
     onAuthStateChanged,
+    sendPasswordResetEmail,
+    confirmPasswordReset as firebaseConfirmPasswordReset,
+    verifyPasswordResetCode,
     User,
     UserCredential
 } from 'firebase/auth';
@@ -31,6 +34,8 @@ import {
     deleteObject
 } from 'firebase/storage';
 import { ProjectInput } from './sharedProjectTypes';
+import { hashPassword } from './utils';
+import { session } from './session';
 
 // Helper to map Firestore docs to data with ID
 // Note: Firestore automatically creates collections when you add documents to them.
@@ -45,24 +50,237 @@ export const authService = {
     signIn: (email: string, password: string) => signInWithEmailAndPassword(auth, email, password),
     signOut: () => signOut(auth),
     onAuthStateChanged: (callback: (user: User | null) => void) => onAuthStateChanged(auth, callback),
-    getCurrentUser: () => auth.currentUser
+    getCurrentUser: () => auth.currentUser,
+
+    /**
+     * Sends a secure password reset email via Firebase Auth.
+     * The link is time-limited (1 hour by default) and single-use.
+     * With handleCodeInApp: true, the link routes back to this app's
+     * /reset-password page where the user sets their new password.
+     * SECURITY: Always resolves successfully to prevent email enumeration.
+     */
+    sendPasswordReset: async (email: string): Promise<{ success: boolean; error?: string }> => {
+        try {
+            const normalized = email.toLowerCase().trim();
+            await sendPasswordResetEmail(auth, normalized, {
+                // Route back to the in-app password reset page
+                url: `${window.location.origin}/?mode=resetPassword`,
+                handleCodeInApp: true,
+            });
+            return { success: true };
+        } catch (error: any) {
+            // Swallow enumeration errors — do NOT reveal if email exists
+            if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-email') {
+                return { success: true };
+            }
+            console.error('[sendPasswordReset] Unexpected error:', error.code, error.message);
+            return { success: false, error: 'Unable to send reset email. Please try again later.' };
+        }
+    },
+
+    /**
+     * Verifies that a password reset oobCode (from the email link) is valid
+     * and returns the email address it belongs to.
+     */
+    verifyResetCode: async (oobCode: string): Promise<{ success: boolean; email?: string; error?: string }> => {
+        try {
+            const email = await verifyPasswordResetCode(auth, oobCode);
+            return { success: true, email };
+        } catch (error: any) {
+            console.error('[verifyResetCode] Error:', error.code, error.message);
+            return { success: false, error: 'This reset link is invalid or has expired. Please request a new one.' };
+        }
+    },
+
+    /**
+     * Completes the password reset by applying the new password using the oobCode.
+     */
+    confirmPasswordReset: async (oobCode: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
+        try {
+            await firebaseConfirmPasswordReset(auth, oobCode, newPassword);
+            return { success: true };
+        } catch (error: any) {
+            console.error('[confirmPasswordReset] Error:', error.code, error.message);
+            if (error.code === 'auth/expired-action-code') {
+                return { success: false, error: 'This reset link has expired. Please request a new one.' };
+            }
+            if (error.code === 'auth/invalid-action-code') {
+                return { success: false, error: 'This reset link is invalid or has already been used.' };
+            }
+            if (error.code === 'auth/weak-password') {
+                return { success: false, error: 'Password must be at least 6 characters.' };
+            }
+            return { success: false, error: 'Failed to reset password. Please try again.' };
+        }
+    },
 };
 
 // ============================================
-// FIRESTORE BASE SERVICES
+// FIRESTORE PASSWORD RESET SERVICE
+// For users stored in Firestore (not Firebase Auth).
+// Flow: email lookup → token stored in Firestore → email sent via EmailJS
+//       → user clicks link → token verified → password_hash updated in Firestore
 // ============================================
+
+const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+
+export const passwordResetService = {
+    /**
+     * Step 1: Request a password reset.
+     * Looks up the user in Firestore, generates a secure token,
+     * stores it in the `passwordResets` collection, then sends the email.
+     * SECURITY: Always returns success to prevent email enumeration.
+     */
+    requestReset: async (email: string): Promise<{ success: boolean; error?: string }> => {
+        try {
+            const normalized = email.toLowerCase().trim();
+
+            // Look up user in Firestore
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where('email', '==', normalized), limit(1));
+            const snapshot = await getDocs(q);
+
+            if (snapshot.empty) {
+                // Don't reveal user doesn't exist — silently succeed
+                console.warn('[passwordResetService] No user found for email (enumeration guard)');
+                return { success: true };
+            }
+
+            const userDoc = snapshot.docs[0];
+            const userId = userDoc.id;
+            const userName = userDoc.data().name || 'RHIVE User';
+
+            // Generate a cryptographically secure token
+            const tokenBytes = new Uint8Array(32);
+            crypto.getRandomValues(tokenBytes);
+            const token = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+            // Store the token in Firestore with expiry
+            const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS).toISOString();
+            await setDoc(doc(db, 'passwordResets', token), {
+                userId,
+                email: normalized,
+                expiresAt,
+                used: false,
+                createdAt: new Date().toISOString(),
+            });
+
+            // Build the reset URL
+            const resetUrl = `${window.location.origin}/?mode=firestoreReset&token=${token}`;
+
+            // Send email via EmailJS
+            const emailjsServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
+            const emailjsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
+            const emailjsPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+
+            if (!emailjsServiceId || !emailjsTemplateId || !emailjsPublicKey) {
+                console.error('[passwordResetService] EmailJS env vars not configured. Reset URL:', resetUrl);
+                // In dev, still return success and log the URL so it can be tested
+                return { success: true };
+            }
+
+            const { default: emailjs } = await import('@emailjs/browser');
+            await emailjs.send(
+                emailjsServiceId,
+                emailjsTemplateId,
+                {
+                    to_email: normalized,
+                    to_name: userName,
+                    reset_url: resetUrl,
+                    expires_in: '1 hour',
+                    app_name: 'RHIVE QOS',
+                },
+                emailjsPublicKey
+            );
+
+            return { success: true };
+        } catch (error: any) {
+            console.error('[passwordResetService.requestReset] Error:', error);
+            return { success: false, error: 'Unable to send reset email. Please try again later.' };
+        }
+    },
+
+    /**
+     * Step 2: Verify a reset token from the URL.
+     * Returns the email address if valid, or an error if expired/used/invalid.
+     */
+    verifyToken: async (token: string): Promise<{ success: boolean; email?: string; userId?: string; error?: string }> => {
+        try {
+            if (!token) return { success: false, error: 'Invalid reset link.' };
+
+            const tokenDocRef = doc(db, 'passwordResets', token);
+            const tokenSnap = await getDoc(tokenDocRef);
+
+            if (!tokenSnap.exists()) {
+                return { success: false, error: 'This reset link is invalid or has already been used.' };
+            }
+
+            const data = tokenSnap.data();
+
+            if (data.used) {
+                return { success: false, error: 'This reset link has already been used. Please request a new one.' };
+            }
+
+            if (new Date() > new Date(data.expiresAt)) {
+                return { success: false, error: 'This reset link has expired. Links are valid for 1 hour.' };
+            }
+
+            return { success: true, email: data.email, userId: data.userId };
+        } catch (error: any) {
+            console.error('[passwordResetService.verifyToken] Error:', error);
+            return { success: false, error: 'Unable to verify reset link. Please try again.' };
+        }
+    },
+
+    /**
+     * Step 3: Apply the new password.
+     * Hashes the new password and updates password_hash in the users collection.
+     * Marks the reset token as used so it cannot be replayed.
+     */
+    applyNewPassword: async (token: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
+        try {
+            // Re-verify token before applying
+            const verification = await passwordResetService.verifyToken(token);
+            if (!verification.success || !verification.userId) {
+                return { success: false, error: verification.error };
+            }
+
+            const { hashPassword } = await import('./utils');
+            const newHash = await hashPassword(newPassword);
+
+            // Update password_hash in the users collection
+            const userRef = doc(db, 'users', verification.userId);
+            await updateDoc(userRef, {
+                password_hash: newHash,
+                updated_at: new Date().toISOString(),
+            });
+
+            // Mark the token as used (single-use enforcement)
+            const tokenRef = doc(db, 'passwordResets', token);
+            await updateDoc(tokenRef, { used: true, usedAt: new Date().toISOString() });
+
+            return { success: true };
+        } catch (error: any) {
+            console.error('[passwordResetService.applyNewPassword] Error:', error);
+            return { success: false, error: 'Failed to update password. Please try again.' };
+        }
+    },
+};
+
 
 export const firestoreService = {
     // This function automatically creates the collection if it doesn't exist
     addDocument: async (collectionName: string, data: DocumentData) => {
         try {
+            // Firestore fails on undefined fields, serialize to strip undefined
+            const cleanData = JSON.parse(JSON.stringify(data));
             // Adding a document implicitly 'creates' the collection
             const docRef = await addDoc(collection(db, collectionName), {
-                ...data,
+                ...cleanData,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             });
-            return { success: true, id: docRef.id, data: { id: docRef.id, ...data } };
+            return { success: true, id: docRef.id, data: { id: docRef.id, ...cleanData } };
         } catch (error: any) {
             console.error(`Error adding to ${collectionName}:`, error);
             return { success: false, error: error.message };
@@ -119,9 +337,10 @@ export const firestoreService = {
 
     updateDocument: async (collectionName: string, id: string, data: any) => {
         try {
+            const cleanData = JSON.parse(JSON.stringify(data));
             const docRef = doc(db, collectionName, id);
-            await updateDoc(docRef, { ...data, updated_at: new Date().toISOString() });
-            return { success: true, data: { id, ...data } };
+            await updateDoc(docRef, { ...cleanData, updated_at: new Date().toISOString() });
+            return { success: true, data: { id, ...cleanData } };
         } catch (error: any) {
             console.error(`Error updating ${collectionName} ${id}:`, error);
             return { success: false, error: error.message };
@@ -143,9 +362,10 @@ export const firestoreService = {
             const batch = writeBatch(db);
             const colRef = collection(db, collectionName);
             dataArray.forEach(data => {
+                const cleanData = JSON.parse(JSON.stringify(data));
                 const newDocRef = doc(colRef);
                 batch.set(newDocRef, {
-                    ...data,
+                    ...cleanData,
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 });
@@ -162,6 +382,29 @@ export const firestoreService = {
 // ============================================
 // DOMAIN SERVICES
 // ============================================
+
+// Helper to normalize a Firestore 'deals' document to the common project shape
+const normalizeDeal = (deal: any): any => ({
+    ...deal,
+    _source: 'deals',
+    // Support both Zoho-style (Deal_Name / Stage) and internal snake_case fields
+    name: deal.name || deal.Deal_Name || deal.deal_name || 'Unnamed Deal',
+    current_stage: deal.current_stage || deal.Deal_Stage || deal.stage || 'Lead',
+    project_type: deal.project_type || deal.Type || deal.type || 'Deal',
+    property_address: deal.property_address || deal.Property_Address || deal.Address || '',
+    lead_source: deal.lead_source || deal.Lead_Source || deal.source || '',
+    notes: deal.notes || deal.Description || deal.description || '',
+    quote: deal.quote ?? (
+        deal.Amount || deal.amount
+            ? { total: Number(deal.Amount || deal.amount) }
+            : undefined
+    ),
+    contact_id: deal.contact_id || deal.Contact_Id || null,
+    property_id: deal.property_id || null,
+    account_id: deal.account_id || deal.Account_Id || null,
+    created_at: deal.created_at || deal.Created_Time || null,
+    updated_at: deal.updated_at || deal.Modified_Time || null,
+});
 
 // Helper to convert CamelCase ProjectInput to SnakeCase for compatibility
 const mapProjectToSnakeCase = (input: ProjectInput) => ({
@@ -185,49 +428,82 @@ export const projectService = {
     getAll: async () => {
         const p = await firestoreService.getAllDocuments('projects');
         const l = await firestoreService.getAllDocuments('leads');
-        const combined = [...(p.data || []), ...(l.data || [])];
+        const d = await firestoreService.getAllDocuments('deals');
+        const combined = [
+            ...(p.data || []),
+            ...(l.data || []),
+            ...(d.data || []).map(normalizeDeal),
+        ];
         return { success: true, data: combined };
     },
     subscribe: (callback: (data: any[]) => void) => {
         let projects: any[] = [];
         let leads: any[] = [];
-        
-        const notify = () => callback([...projects, ...leads]);
-        
+        let deals: any[] = [];
+
+        const notify = () => callback([...projects, ...leads, ...deals]);
+
+
         const unsubProjects = firestoreService.subscribeToDocuments('projects', (data) => {
             projects = data;
             notify();
         });
-        
+
         const unsubLeads = firestoreService.subscribeToDocuments('leads', (data) => {
             leads = data;
             notify();
         });
-        
+
+        const unsubDeals = onSnapshot(
+            collection(db, 'deals'),
+            (snap) => {
+                deals = snap.docs.map(mapDoc).map(normalizeDeal);
+                notify();
+            },
+            (error) => {
+                console.warn('🔥 Firestore [deals] subscribe error:', error.code);
+                notify();
+            }
+        );
+
+
         return () => {
             unsubProjects();
             unsubLeads();
+            unsubDeals();
         };
     },
     subscribeAllWork: (callback: (data: any[]) => void) => {
         let projects: any[] = [];
         let leads: any[] = [];
-        const notify = () => callback([...projects, ...leads]);
-        
+        let deals: any[] = [];
+        const notify = () => callback([...projects, ...leads, ...deals]);
+
         const unsubP = firestoreService.subscribeToDocuments('projects', (d) => { projects = d; notify(); });
         const unsubL = firestoreService.subscribeToDocuments('leads', (d) => { leads = d; notify(); });
-        
-        return () => { unsubP(); unsubL(); };
+        const unsubD = onSnapshot(
+            collection(db, 'deals'),
+            (snap) => { deals = snap.docs.map(mapDoc).map(normalizeDeal); notify(); },
+            () => notify()
+        );
+
+        return () => { unsubP(); unsubL(); unsubD(); };
     },
     subscribeToRecentActivity: (callback: (data: any[]) => void, limitCount = 6) => {
         let projectDocs: any[] = [];
         let leadDocs: any[] = [];
+        let dealDocs: any[] = [];
         let projectsFired = false;
         let leadsFired = false;
+        let dealsFired = false;
+        let notified = false;
 
         const notify = () => {
-            if (!projectsFired || !leadsFired) return;
-            const merged = [...projectDocs, ...leadDocs]
+            if (notified) return;
+            if (!projectsFired || !leadsFired || !dealsFired) return;
+            notified = true;
+            clearTimeout(safetyTimer);
+            const merged = [...projectDocs, ...leadDocs, ...dealDocs]
                 .sort((a, b) =>
                     new Date(b.updated_at || b.created_at || b._importedAt || 0).getTime() -
                     new Date(a.updated_at || a.created_at || a._importedAt || 0).getTime()
@@ -235,6 +511,15 @@ export const projectService = {
                 .slice(0, limitCount);
             callback(merged);
         };
+
+        const safetyTimer = setTimeout(() => {
+            if (!notified) {
+                projectsFired = true;
+                leadsFired = true;
+                dealsFired = true;
+                notify();
+            }
+        }, 800);
 
         const unsubP = onSnapshot(
             collection(db, 'projects'),
@@ -246,8 +531,18 @@ export const projectService = {
             (snap) => { leadDocs = snap.docs.map(mapDoc); leadsFired = true; notify(); },
             () => { leadsFired = true; notify(); }
         );
+        const unsubD = onSnapshot(
+            collection(db, 'deals'),
+            (snap) => { dealDocs = snap.docs.map(mapDoc).map(normalizeDeal); dealsFired = true; notify(); },
+            () => { dealsFired = true; notify(); }
+        );
 
-        return () => { unsubP(); unsubL(); };
+        return () => {
+            clearTimeout(safetyTimer);
+            unsubP();
+            unsubL();
+            unsubD();
+        };
     },
     getById: (id: string) => firestoreService.getDocument('projects', id),
     createBatch: (dataArray: any[]) => firestoreService.createBatch('projects', dataArray),
@@ -383,6 +678,16 @@ export const contactService = {
             return { success: false, error: error.message };
         }
     },
+    getByPhone: async (phone: string) => {
+        try {
+            const q = query(collection(db, 'contacts'), where('phone', '==', phone));
+            const snapshot = await getDocs(q);
+            if (snapshot.empty) return { success: false, error: 'Contact not found' };
+            return { success: true, data: snapshot.docs.map(mapDoc)[0] };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
     getByEmail: async (email: string) => {
         try {
             const q = query(collection(db, 'contacts'), where('email', '==', email.toLowerCase().trim()));
@@ -418,17 +723,20 @@ export const userService = {
     getAll: () => firestoreService.getAllDocuments('users'),
     subscribe: (callback: (data: any[]) => void) => firestoreService.subscribeToDocuments('users', callback),
     create: (data: any) => firestoreService.addDocument('users', data),
+    // Write a Firestore user doc using a specific ID (e.g. Firebase Auth UID)
     createWithId: async (id: string, data: any) => {
         try {
+            const cleanData = JSON.parse(JSON.stringify(data));
             const docRef = doc(db, 'users', id);
             await setDoc(docRef, {
-                ...data,
-                created_at: data.created_at || new Date().toISOString(),
+                ...cleanData,
+                created_at: cleanData.created_at || new Date().toISOString(),
                 updated_at: new Date().toISOString()
             });
-            return { success: true, id, data: { id, ...data } };
+            return { success: true, id, data: { id, ...cleanData } };
         } catch (error: any) {
             console.error('Error creating user with ID:', error);
+
             return { success: false, error: error.message };
         }
     },
@@ -750,5 +1058,54 @@ export const propertyService = {
     create: (data: any) => firestoreService.addDocument('properties', data),
     update: (id: string, data: any) => firestoreService.updateDocument('properties', id, data),
     delete: (id: string) => firestoreService.deleteDocument('properties', id)
+};
+
+// ============================================
+// USER LOG SERVICE
+// ============================================
+export interface UserLog {
+    id?: string;
+    userId: string;
+    userName: string;
+    userRole: string;
+    actionType: string;
+    description: string;
+    payload?: Record<string, any>;
+    timestamp: string;
+}
+
+export const userLogService = {
+    getAll: () => firestoreService.getAllDocuments('user_log'),
+    subscribe: (callback: (data: any[]) => void) => firestoreService.subscribeToDocuments('user_log', callback),
+    logAction: async (
+        actionType: string,
+        description: string,
+        payload?: Record<string, any>,
+        userContext?: { id: string; name: string; role: string }
+    ) => {
+        const currentUser = userContext || session.read();
+        const userId = currentUser?.id || 'anonymous';
+        const userName = currentUser?.name || 'Anonymous';
+        const userRole = currentUser?.role || 'Guest';
+
+        const logDoc = {
+            userId,
+            userName,
+            userRole,
+            actionType,
+            description,
+            payload: payload || {},
+            timestamp: new Date().toISOString()
+        };
+
+        try {
+            const result = await firestoreService.addDocument('user_log', logDoc);
+            console.log(`[user_log] Successfully recorded log: ${actionType} - ${description}`, result);
+            return result;
+        } catch (error: any) {
+            console.warn('🔥 Failed to write user action to Firestore user_log:', error);
+            return { success: false, error: error.message };
+        }
+    }
 };
 
